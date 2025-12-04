@@ -1,20 +1,121 @@
-## 🛡️ Ultimate Security Scan Summary (Severity Color-Coded)
+name: Ultimate Security Suite
 
-| Scan Type | Status | High | Medium | Low | Link |
-|-----------|--------|------|--------|-----|------|
-| **CodeQL Analysis** | `${{ needs.codeql-analysis.result }}` | `${{ needs.codeql-analysis.outputs.high || 0 }}` | `${{ needs.codeql-analysis.outputs.medium || 0 }}` | `${{ needs.codeql-analysis.outputs.low || 0 }}` | [View CodeQL](https://github.com/${{ github.repository }}/security/code-scanning) |
-| **Dependency Review** | `${{ needs.dependency-review.result }}` | `${{ needs.dependency-review.outputs.high || 0 }}` | `${{ needs.dependency-review.outputs.medium || 0 }}` | `${{ needs.dependency-review.outputs.low || 0 }}` | [View Dependency Check](https://github.com/${{ github.repository }}/pull/${{ github.event.pull_request.number }}/checks) |
-| **Secret Leak Scan** | `${{ needs.secret-scan.result }}` | N/A | N/A | `${{ needs.secret-scan.outputs.secrets || 0 }}` | [View Secrets](https://github.com/${{ github.repository }}/actions/workflows/secret-scan.yml) |
-| **Container Scan (Trivy)** | `${{ needs.container-scan.result }}` | `${{ needs.container-scan.outputs.high || 0 }}` | `${{ needs.container-scan.outputs.medium || 0 }}` | `${{ needs.container-scan.outputs.low || 0 }}` | [View Container Scan](https://github.com/${{ github.repository }}/security/code-scanning) |
-| **License Compliance** | `${{ needs.license-check.result }}` | N/A | N/A | `${{ needs.license-check.outputs.issues || 0 }}` | [Download License Report](https://github.com/${{ github.repository }}/suites/${{ github.run_id }}/artifacts) |
-| **Web App DAST (ZAP)** | `${{ needs.dast-scan.result }}` | `${{ needs.dast-scan.outputs.high || 0 }}` | `${{ needs.dast-scan.outputs.medium || 0 }}` | `${{ needs.dast-scan.outputs.low || 0 }}` | [View DAST Report](https://github.com/${{ github.repository }}/actions/workflows/dast-scan.yml) |
-| **Cloud / IaC Scan (Checkov)** | `${{ needs.cloud-scan.result }}` | `${{ needs.cloud-scan.outputs.high || 0 }}` | `${{ needs.cloud-scan.outputs.medium || 0 }}` | `${{ needs.cloud-scan.outputs.low || 0 }}` | [View IaC Scan](https://github.com/${{ github.repository }}/actions/workflows/cloud-scan.yml) |
+on:
+  pull_request:
+    branches: [ "main", "master" ]
+  push:
+    branches: [ "main", "master" ]
+  schedule:
+    - cron: "0 3 * * *" # daily scan
 
----
+permissions:
+  contents: read
+  security-events: write
 
-> ⚠️ **Legend:**  
-> 🔴 High severity issues  
-> 🟠 Medium severity issues  
-> 🟢 Low severity issues  
+jobs:
+  codeql-analysis:
+    name: CodeQL Security Scan
+    runs-on: ubuntu-latest
+    outputs:
+      high: ${{ steps.set-outputs.outputs.high }}
+      medium: ${{ steps.set-outputs.outputs.medium }}
+      low: ${{ steps.set-outputs.outputs.low }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: 'javascript, python, go, ruby, csharp, java'
+      - run: echo "Add build commands if needed"
+      - uses: github/codeql-action/analyze@v3
+      - name: Set outputs
+        id: set-outputs
+        run: |
+          high=$(jq '[.runs[0].results[] | select(.level=="error")] | length' codeql-results.sarif)
+          medium=$(jq '[.runs[0].results[] | select(.level=="warning")] | length' codeql-results.sarif)
+          low=$(jq '[.runs[0].results[] | select(.level=="note")] | length' codeql-results.sarif)
+          echo "::set-output name=high::$high"
+          echo "::set-output name=medium::$medium"
+          echo "::set-output name=low::$low"
 
-> Click the links to see detailed reports in GitHub Actions or artifacts.
+  dependency-review:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    outputs:
+      high: ${{ steps.set-outputs.outputs.high }}
+      medium: ${{ steps.set-outputs.outputs.medium }}
+      low: ${{ steps.set-outputs.outputs.low }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        id: dep-review
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set outputs
+        id: set-outputs
+        run: |
+          high=$(jq '[.vulnerabilities[] | select(.severity=="HIGH")] | length' dep-review-output.json)
+          medium=$(jq '[.vulnerabilities[] | select(.severity=="MODERATE" or .severity=="MEDIUM")] | length' dep-review-output.json)
+          low=$(jq '[.vulnerabilities[] | select(.severity=="LOW" or .severity=="INFO")] | length' dep-review-output.json)
+          echo "::set-output name=high::$high"
+          echo "::set-output name=medium::$medium"
+          echo "::set-output name=low::$low"
+
+  secret-scan:
+    name: Secret Leak Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: gitleaks/gitleaks-action@v2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+  container-scan:
+    name: Container Vulnerability Scan
+    runs-on: ubuntu-latest
+    outputs:
+      high: ${{ steps.set-outputs.outputs.high }}
+      medium: ${{ steps.set-outputs.outputs.medium }}
+      low: ${{ steps.set-outputs.outputs.low }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - run: docker build -t my-app:latest .
+      - uses: aquasecurity/trivy-action@v2
+        id: trivy
+        with:
+          image-ref: my-app:latest
+          format: sarif
+          output: trivy-report.sarif
+          vuln-type: os,library
+      - name: Set outputs
+        id: set-outputs
+        run: |
+          high=$(jq '.runs[0].results | map(select(.level=="HIGH")) | length' trivy-report.sarif)
+          medium=$(jq '.runs[0].results | map(select(.level=="MEDIUM")) | length' trivy-report.sarif)
+          low=$(jq '.runs[0].results | map(select(.level=="LOW")) | length' trivy-report.sarif)
+          echo "::set-output name=high::$high"
+          echo "::set-output name=medium::$medium"
+          echo "::set-output name=low::$low"
+
+  license-check:
+    name: License Compliance Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm install -g license-checker
+      - run: license-checker --json > licenses.json
+      - uses: actions/upload-artifact@v3
+        with:
+          name: licenses-report
+          path: licenses.json
+
+  pr-summary:
+    name: PR Security Summary
+    runs-on: ubuntu-latest
+    needs: [codeql-analysis, dependency-review, secret-scan, container-scan, license-check]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: "🛡️ Ultimate Security Scan Summary"
+          path: .github/pr-templates/pr-summary-template.md
