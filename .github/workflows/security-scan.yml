@@ -1,0 +1,20 @@
+## 🛡️ Ultimate Security Scan Summary (Severity Color-Coded)
+
+| Scan Type | Status | High | Medium | Low | Link |
+|-----------|--------|------|--------|-----|------|
+| **CodeQL Analysis** | `${{ needs.codeql-analysis.result }}` | `${{ needs.codeql-analysis.outputs.high || 0 }}` | `${{ needs.codeql-analysis.outputs.medium || 0 }}` | `${{ needs.codeql-analysis.outputs.low || 0 }}` | [View CodeQL](https://github.com/${{ github.repository }}/security/code-scanning) |
+| **Dependency Review** | `${{ needs.dependency-review.result }}` | `${{ needs.dependency-review.outputs.high || 0 }}` | `${{ needs.dependency-review.outputs.medium || 0 }}` | `${{ needs.dependency-review.outputs.low || 0 }}` | [View Dependency Check](https://github.com/${{ github.repository }}/pull/${{ github.event.pull_request.number }}/checks) |
+| **Secret Leak Scan** | `${{ needs.secret-scan.result }}` | N/A | N/A | `${{ needs.secret-scan.outputs.secrets || 0 }}` | [View Secrets](https://github.com/${{ github.repository }}/actions/workflows/secret-scan.yml) |
+| **Container Scan (Trivy)** | `${{ needs.container-scan.result }}` | `${{ needs.container-scan.outputs.high || 0 }}` | `${{ needs.container-scan.outputs.medium || 0 }}` | `${{ needs.container-scan.outputs.low || 0 }}` | [View Container Scan](https://github.com/${{ github.repository }}/security/code-scanning) |
+| **License Compliance** | `${{ needs.license-check.result }}` | N/A | N/A | `${{ needs.license-check.outputs.issues || 0 }}` | [Download License Report](https://github.com/${{ github.repository }}/suites/${{ github.run_id }}/artifacts) |
+| **Web App DAST (ZAP)** | `${{ needs.dast-scan.result }}` | `${{ needs.dast-scan.outputs.high || 0 }}` | `${{ needs.dast-scan.outputs.medium || 0 }}` | `${{ needs.dast-scan.outputs.low || 0 }}` | [View DAST Report](https://github.com/${{ github.repository }}/actions/workflows/dast-scan.yml) |
+| **Cloud / IaC Scan (Checkov)** | `${{ needs.cloud-scan.result }}` | `${{ needs.cloud-scan.outputs.high || 0 }}` | `${{ needs.cloud-scan.outputs.medium || 0 }}` | `${{ needs.cloud-scan.outputs.low || 0 }}` | [View IaC Scan](https://github.com/${{ github.repository }}/actions/workflows/cloud-scan.yml) |
+
+---
+
+> ⚠️ **Legend:**  
+> 🔴 High severity issues  
+> 🟠 Medium severity issues  
+> 🟢 Low severity issues  
+
+> Click the links to see detailed reports in GitHub Actions or artifacts.
